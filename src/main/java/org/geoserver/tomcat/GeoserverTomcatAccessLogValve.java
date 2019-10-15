@@ -35,12 +35,14 @@ public class GeoserverTomcatAccessLogValve extends AccessLogValve {
 		public void addElement(CharArrayWriter buf, Date date, Request request, Response response, long time) {
 			String username = null;
 			
-			HttpSession session = request.getSession(false);
-			
-			if (session != null) {
-				username = extractUsernameFromSession(session);
+			if (username == null) {
+				username = extractUsernameFromSpringViaHttpSession(request);
 			}
-
+			
+			if (username == null) {
+				username = extractUsernameFromSpringViaSecurityContextHolder();
+			}
+			
 			if (username != null) {
 				buf.append(username);
 			} else {
@@ -48,18 +50,21 @@ public class GeoserverTomcatAccessLogValve extends AccessLogValve {
 			}
 		}
 
+
 	}
 	
 	protected class GeoserverUserOrNormalUserElement extends UserElement {
 		public void addElement(CharArrayWriter buf, Date date, Request request, Response response, long time) {
 			String username = null;
 			
-			HttpSession session = request.getSession(false);
-			
-			if (session != null) {
-				username = extractUsernameFromSession(session);
+			if (username == null) {
+				username = extractUsernameFromSpringViaHttpSession(request);
 			}
-
+			
+			if (username == null) {
+				username = extractUsernameFromSpringViaSecurityContextHolder();
+			}
+			
 			if (username != null) {
 				buf.append(username);
 			} else {
@@ -68,6 +73,32 @@ public class GeoserverTomcatAccessLogValve extends AccessLogValve {
 		}
 	}
 
+	private String extractUsernameFromSpringViaSecurityContextHolder() {
+		try {
+			Class<?> securityContextHolderclass = Class.forName("org.springframework.security.core.context.SecurityContextHolder");
+			Method getContext = securityContextHolderclass.getMethod("getContext");
+			
+			Object springSecurityContext = getContext.invoke(null);
+			
+			if (springSecurityContext != null) {
+				return extractUsernameFromSpringSecurityContext(springSecurityContext);
+			}
+			
+		} catch(Exception e) {
+			log.trace("Failed to get context from SecurityContextHolder", e);
+		}
+		return null;
+	}
+	
+	private String extractUsernameFromSpringViaHttpSession(Request request) {
+		HttpSession session = request.getSession(false);
+		
+		if (session != null) {
+			return extractUsernameFromSession(session);
+		}
+		return null;
+	}
+	
 	private String extractUsernameFromSession(HttpSession session) {
 		try {
 			Object springSecurityContext = session.getAttribute("SPRING_SECURITY_CONTEXT");
